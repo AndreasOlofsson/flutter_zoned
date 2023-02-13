@@ -1,0 +1,19 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.buildlog/
+.history
+.svn/
+migrate_working_dir/
+.vscode/
+.fvm/flutter_sdk
+
+# Flutter/Dart/Pub related
+/pubspec.lock
+.dart_tool/
+.packages
+build/

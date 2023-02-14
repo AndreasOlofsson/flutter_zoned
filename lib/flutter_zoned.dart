@@ -147,9 +147,11 @@ class _ZonedBuildOwner extends BuildOwner {
     }
 
     if (_currentZonedTree != null) {
-      _currentZonedTree!.widget.zone.run(
-        () => super.buildScope(_currentZonedTree!, callback),
-      );
+      if (_currentZonedTree!.debugIsActive) {
+        _currentZonedTree!.widget.zone.run(
+          () => super.buildScope(_currentZonedTree!, callback),
+        );
+      }
 
       SchedulerBinding.instance.addPostFrameCallback(_buildZonedTrees);
     } else {

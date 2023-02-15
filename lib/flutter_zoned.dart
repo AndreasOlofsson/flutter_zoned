@@ -139,9 +139,9 @@ class ZonedLiveTestWidgetsFlutterBinding extends LiveTestWidgetsFlutterBinding
 class _ZonedBuildOwner extends BuildOwner {
   _ZonedBuildOwner({super.onBuildScheduled, super.focusManager});
 
-  final Map<_ZonedElement, LinkedHashSet<Element>> _zonedDirtyLists = {};
-  final List<Element> _queuedScheduleBuildFor = [];
-  _ZonedElement? _currentZonedTree;
+  @override
+  VoidCallback? get onBuildScheduled =>
+      _enableOnBuildScheduled ? super.onBuildScheduled : null;
 
   @override
   void buildScope(Element context, [VoidCallback? callback]) {
@@ -149,6 +149,8 @@ class _ZonedBuildOwner extends BuildOwner {
         WidgetsFlutterBinding.ensureInitialized().renderViewElement) {
       return super.buildScope(context, callback);
     }
+
+    super.buildScope(context, callback);
 
     final zonedDirtyLists = _zonedDirtyLists.entries.toList();
     _zonedDirtyLists.clear();
@@ -158,8 +160,19 @@ class _ZonedBuildOwner extends BuildOwner {
       if (zonedElement.debugIsActive) {
         _currentZonedTree = zonedElement;
         for (final element in entry.value) {
-          if (element.dirty) {
+          final zonedAncestor = _zonedAncestor(element);
+          if (zonedAncestor != zonedElement) {
+            if (zonedAncestor == null) {
+              _queuedScheduleBuildFor.add(element);
+            } else {
+              // ignore: prefer_collection_literals
+              (_zonedDirtyLists[zonedAncestor] ??= LinkedHashSet())
+                  .add(element);
+            }
+          } else if (element.dirty) {
+            _enableOnBuildScheduled = false;
             super.scheduleBuildFor(element);
+            _enableOnBuildScheduled = true;
           }
         }
         zonedElement.widget.zone.run(() => super.buildScope(zonedElement));
@@ -172,27 +185,32 @@ class _ZonedBuildOwner extends BuildOwner {
 
     for (final element in queuedScheduleBuildFor) {
       if (element.dirty && element.debugIsActive) {
+        _enableOnBuildScheduled = false;
         super.scheduleBuildFor(element);
+        _enableOnBuildScheduled = true;
       }
     }
 
-    super.buildScope(context, callback);
+    if (queuedScheduleBuildFor.isNotEmpty) {
+      super.buildScope(context, callback);
+    }
   }
 
   @override
   void scheduleBuildFor(Element element) {
-    final zonedAncestor = element
-        .debugGetDiagnosticChain()
-        .skip(1)
-        .firstWhereOrNull((ancestor) => ancestor is _ZonedElement);
+    final zonedAncestor = _zonedAncestor(element);
 
-    if (zonedAncestor is _ZonedElement) {
+    if (zonedAncestor != null) {
       if (_currentZonedTree != zonedAncestor) {
         // ignore: prefer_collection_literals
         (_zonedDirtyLists[zonedAncestor] ??= LinkedHashSet()).add(element);
 
         if (!zonedAncestor.dirty) {
-          zonedAncestor.markNeedsBuild();
+          if (!debugBuilding) {
+            zonedAncestor.markNeedsBuild();
+          } else if (_currentZonedTree != zonedAncestor) {
+            _queuedScheduleBuildFor.add(zonedAncestor);
+          }
         }
         return;
       }
@@ -203,4 +221,17 @@ class _ZonedBuildOwner extends BuildOwner {
 
     super.scheduleBuildFor(element);
   }
+
+  _ZonedElement? _zonedAncestor(Element element) {
+    return element
+            .debugGetDiagnosticChain()
+            .skip(1)
+            .firstWhereOrNull((ancestor) => ancestor is _ZonedElement)
+        as _ZonedElement?;
+  }
+
+  final Map<_ZonedElement, LinkedHashSet<Element>> _zonedDirtyLists = {};
+  final List<Element> _queuedScheduleBuildFor = [];
+  _ZonedElement? _currentZonedTree;
+  bool _enableOnBuildScheduled = true;
 }

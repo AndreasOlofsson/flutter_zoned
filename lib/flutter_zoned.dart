@@ -147,6 +147,12 @@ class _ZonedBuildOwner extends BuildOwner {
   void buildScope(Element context, [VoidCallback? callback]) {
     if (context !=
         WidgetsFlutterBinding.ensureInitialized().renderViewElement) {
+      final zonedAncestor = _zonedAncestor(context);
+      if (zonedAncestor != null && zonedAncestor.debugIsActive) {
+        return zonedAncestor.widget.zone
+            .run(() => super.buildScope(context, callback));
+      }
+
       return super.buildScope(context, callback);
     }
 

@@ -1,3 +1,7 @@
+## 0.1.4
+
+- Run scoped builds in zone.
+
 ## 0.1.3
 
 - Handle redraws outside of zoned trees properly.
